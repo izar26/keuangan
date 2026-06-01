@@ -21,7 +21,8 @@ export function parseMoneyInput(value: string) {
 }
 
 export function moneyToInput(value: number) {
-  return value > 0 ? String(Math.round(value)) : "";
+  if (value <= 0) return "";
+  return String(Math.round(value)).replace(/\B(?=(\d{3})+(?!\d))/g, ".");
 }
 
 export function isIsoDate(value: string) {

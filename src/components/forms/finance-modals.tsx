@@ -16,7 +16,7 @@ import type { Account, Budget, Goal, Insight, MoneyFlow, Transaction, RecurringT
 import type { Profile } from "@/types/finance";
 import { formatDateInput, isIsoDate, moneyToInput, parseMoneyInput } from "@/lib/forms";
 import { Button } from "@/components/ui/button";
-import { FormField, FormModal, SegmentedField } from "@/components/ui/form-modal";
+import { FormField, FormModal, SegmentedField, MoneyField } from "@/components/ui/form-modal";
 
 type Accent = Account["accent"];
 
@@ -142,7 +142,7 @@ export function AccountFormModal({ account, onClose, onDelete, onSave, visible }
       <FormField label="Nama rekening" onChangeText={setName} placeholder="Kas utama" value={name} />
       <FormField label="Institusi" onChangeText={setInstitution} placeholder="Nama bank/dompet" value={institution} />
       {account ? null : (
-        <FormField keyboardType="number-pad" label="Saldo awal" onChangeText={setBalance} placeholder="0" value={balance} />
+        <MoneyField label="Saldo awal" onChangeText={setBalance} placeholder="0" value={balance} />
       )}
       <FormField label="Nomor pendek" onChangeText={setMask} placeholder="1024" value={mask} />
       <SegmentedField label="Warna" onValueChange={setAccent} options={accentOptions} value={accent} />
@@ -229,7 +229,7 @@ export function BudgetFormModal({ budget, onClose, onDelete, onSave, visible }: 
           </View>
         </ScrollView>
       </View>
-      <FormField keyboardType="number-pad" label="Limit" onChangeText={setLimit} placeholder="0" value={limit} />
+      <MoneyField label="Limit" onChangeText={setLimit} placeholder="0" value={limit} />
       <SegmentedField label="Warna" onValueChange={setAccent} options={accentOptions} value={accent} />
       {budget && onDelete ? <DangerAction disabled={isSaving} label="Hapus budget" onPress={() => onDelete(budget.id)} /> : null}
     </FormModal>
@@ -293,8 +293,8 @@ export function GoalFormModal({ goal, onClose, onDelete, onSave, visible }: Goal
       visible={visible}
     >
       <FormField label="Nama tujuan" onChangeText={setName} placeholder="Dana darurat" value={name} />
-      <FormField keyboardType="number-pad" label="Target" onChangeText={setTarget} placeholder="0" value={target} />
-      <FormField keyboardType="number-pad" label="Terkumpul" onChangeText={setSaved} placeholder="0" value={saved} />
+      <MoneyField label="Target" onChangeText={setTarget} placeholder="0" value={target} />
+      <MoneyField label="Terkumpul" onChangeText={setSaved} placeholder="0" value={saved} />
       <FormField label="Tanggal target" onChangeText={setDueDate} placeholder="2026-12-31" value={dueDate} />
       {goal && onDelete ? <DangerAction disabled={isSaving} label="Hapus tujuan" onPress={() => onDelete(goal.id)} /> : null}
     </FormModal>
@@ -406,7 +406,7 @@ export function TransactionFormModal({
           </View>
         </ScrollView>
       </View>
-      <FormField keyboardType="number-pad" label="Nominal" onChangeText={setAmount} placeholder="0" value={amount} />
+      <MoneyField label="Nominal" onChangeText={setAmount} placeholder="0" value={amount} />
       {accountOptions.length > 0 ? (
         <SegmentedField label="Rekening" onValueChange={setAccountId} options={accountOptions} value={accountId} />
       ) : null}
@@ -503,7 +503,7 @@ export function TransferFormModal({ accounts, onClose, onSave, visible }: Transf
     >
       <SegmentedField label="Dari" onValueChange={setFromAccountId} options={accountOptions} value={fromAccountId} />
       <SegmentedField label="Ke" onValueChange={setToAccountId} options={accountOptions} value={toAccountId} />
-      <FormField keyboardType="number-pad" label="Nominal" onChangeText={setAmount} placeholder="0" value={amount} />
+      <MoneyField label="Nominal" onChangeText={setAmount} placeholder="0" value={amount} />
     </FormModal>
   );
 }
@@ -730,7 +730,7 @@ export function RecurringTransactionFormModal({
           </View>
         </ScrollView>
       </View>
-      <FormField keyboardType="number-pad" label="Nominal" onChangeText={setAmount} placeholder="0" value={amount} />
+      <MoneyField label="Nominal" onChangeText={setAmount} placeholder="0" value={amount} />
       {accountOptions.length > 0 ? (
         <SegmentedField label="Rekening (Sumber)" onValueChange={setAccountId} options={accountOptions} value={accountId} />
       ) : null}
