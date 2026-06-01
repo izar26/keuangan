@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState, type PropsWithChildren } from "react";
+import { useCallback, useEffect, useRef, useState, type PropsWithChildren } from "react";
 import { AppState, Pressable, Text, View } from "react-native";
 import * as Haptics from "expo-haptics";
 import * as LocalAuthentication from "expo-local-authentication";
@@ -15,23 +15,40 @@ export function PrivacyGate({ children }: PropsWithChildren) {
   const privacyEnabled = summary.settings.localPrivacyMode || summary.settings.securityLock;
   const [state, setState] = useState<PrivacyState>("checking");
   const [message, setMessage] = useState("Mengamankan data lokal...");
+  const hasUnlockedRef = useRef(false);
 
   useEffect(() => {
-    if (!privacyEnabled) {
-      return;
-    }
-
-    ScreenCapture.preventScreenCaptureAsync("keuangan-private").catch(() => undefined);
-    ScreenCapture.enableAppSwitcherProtectionAsync(0.72).catch(() => undefined);
-
-    return () => {
+    if (summary.settings.localPrivacyMode) {
+      ScreenCapture.preventScreenCaptureAsync("keuangan-private").catch(() => undefined);
+      ScreenCapture.enableAppSwitcherProtectionAsync(0.72).catch(() => undefined);
+    } else {
       ScreenCapture.allowScreenCaptureAsync("keuangan-private").catch(() => undefined);
       ScreenCapture.disableAppSwitcherProtectionAsync().catch(() => undefined);
+    }
+
+    return () => {
+      if (summary.settings.localPrivacyMode) {
+        ScreenCapture.allowScreenCaptureAsync("keuangan-private").catch(() => undefined);
+        ScreenCapture.disableAppSwitcherProtectionAsync().catch(() => undefined);
+      }
     };
-  }, [privacyEnabled]);
+  }, [summary.settings.localPrivacyMode]);
+
+  useEffect(() => {
+    if (!privacyEnabled || !summary.settings.securityLock) {
+      hasUnlockedRef.current = true;
+      setState("unlocked");
+    }
+  }, [privacyEnabled, summary.settings.securityLock]);
 
   const unlock = useCallback(async () => {
     if (!privacyEnabled || !summary.settings.securityLock) {
+      hasUnlockedRef.current = true;
+      setState("unlocked");
+      return;
+    }
+
+    if (hasUnlockedRef.current) {
       setState("unlocked");
       return;
     }
@@ -46,6 +63,7 @@ export function PrivacyGate({ children }: PropsWithChildren) {
       ]);
 
       if (!hasHardware || !isEnrolled) {
+        hasUnlockedRef.current = true;
         setState("unlocked");
         return;
       }
@@ -59,6 +77,7 @@ export function PrivacyGate({ children }: PropsWithChildren) {
 
       if (result.success) {
         await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+        hasUnlockedRef.current = true;
         setState("unlocked");
         return;
       }
@@ -67,6 +86,7 @@ export function PrivacyGate({ children }: PropsWithChildren) {
       setMessage("Autentikasi dibatalkan. Tap untuk coba lagi.");
       setState("locked");
     } catch {
+      hasUnlockedRef.current = true;
       setState("unlocked");
     }
   }, [privacyEnabled, summary.settings.securityLock]);
@@ -84,6 +104,7 @@ export function PrivacyGate({ children }: PropsWithChildren) {
       }
 
       if (nextState !== "active") {
+        hasUnlockedRef.current = false;
         setState("locked");
         setMessage("Aplikasi dikunci otomatis.");
       } else if (state === "locked") {

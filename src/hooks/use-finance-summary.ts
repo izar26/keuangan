@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useSQLiteContext } from "expo-sqlite";
 
 import {
@@ -25,6 +25,8 @@ import {
   type SaveTransactionInput,
   type SaveRecurringTransactionInput,
   type TransferInput,
+  type DepositGoalInput,
+  depositGoalTransaction,
 } from "@/db/finance-repository";
 import { getMonthKey } from "@/lib/forms";
 import { updateBudgetPulseWidget } from "@/lib/widget-updates";
@@ -48,11 +50,45 @@ const emptySnapshot: FinanceSnapshot = {
   recurringTransactions: [],
 };
 
+// ---------------------------------------------------------------------------
+// Global finance data version counter.
+//
+// Every mutation bumps this counter. Every hook instance subscribes to it and
+// reloads when its local version falls behind the global one. This guarantees
+// that *all* screens converge to the same snapshot after any write, regardless
+// of which screen triggered the write.
+// ---------------------------------------------------------------------------
+
+let globalVersion = 0;
+
+type VersionListener = (version: number) => void;
+const versionListeners = new Set<VersionListener>();
+
+function subscribeVersion(listener: VersionListener) {
+  versionListeners.add(listener);
+  return () => {
+    versionListeners.delete(listener);
+  };
+}
+
+/** Bump the global version and notify every subscriber (all screens). */
+function broadcastFinanceChanged() {
+  globalVersion += 1;
+  const v = globalVersion;
+  for (const listener of versionListeners) {
+    listener(v);
+  }
+}
+
 export function useFinanceSummary() {
   const db = useSQLiteContext();
   const [snapshot, setSnapshot] = useState<FinanceSnapshot>(emptySnapshot);
   const [error, setError] = useState<Error | null>(null);
   const [isLoading, setIsLoading] = useState(true);
+
+  // Track the version this instance has already loaded so we don't reload
+  // redundantly when the component itself triggered the mutation.
+  const loadedVersionRef = useRef(globalVersion);
 
   const reload = useCallback(async () => {
     setIsLoading(true);
@@ -62,6 +98,8 @@ export function useFinanceSummary() {
       const nextSnapshot = await getFinanceSnapshot(db);
       updateBudgetPulseWidget(nextSnapshot);
       setSnapshot(nextSnapshot);
+      // Mark that we are now up-to-date with the current global version.
+      loadedVersionRef.current = globalVersion;
     } catch (cause) {
       setError(cause instanceof Error ? cause : new Error("Gagal memuat data keuangan."));
     } finally {
@@ -69,6 +107,7 @@ export function useFinanceSummary() {
     }
   }, [db]);
 
+  // Initial load on mount.
   useEffect(() => {
     let isMounted = true;
 
@@ -82,6 +121,7 @@ export function useFinanceSummary() {
 
         if (isMounted) {
           setSnapshot(nextSnapshot);
+          loadedVersionRef.current = globalVersion;
         }
       } catch (cause) {
         if (isMounted) {
@@ -101,120 +141,98 @@ export function useFinanceSummary() {
     };
   }, [db]);
 
-  const persistAccount = useCallback(
-    async (input: SaveAccountInput) => {
-      const id = await saveAccount(db, input);
-      await reload();
+  // Subscribe to the global version counter. When another screen (or this
+  // screen) bumps the version, reload if we are behind.
+  useEffect(() => {
+    return subscribeVersion((newVersion) => {
+      if (loadedVersionRef.current < newVersion) {
+        reload();
+      }
+    });
+  }, [reload]);
 
-      return id;
+  // Helper: run a mutation, reload self, then broadcast so every other screen
+  // also reloads. Because reload() updates loadedVersionRef, the broadcast
+  // callback for *this* instance will see it is already up-to-date and skip
+  // the redundant fetch.
+  const mutate = useCallback(
+    async <T>(fn: () => Promise<T>): Promise<T> => {
+      const result = await fn();
+      await reload();
+      broadcastFinanceChanged();
+      return result;
     },
-    [db, reload],
+    [reload],
+  );
+
+  const persistAccount = useCallback(
+    (input: SaveAccountInput) => mutate(() => saveAccount(db, input)),
+    [db, mutate],
   );
 
   const removeAccount = useCallback(
-    async (id: string) => {
-      await deleteAccount(db, id);
-      await reload();
-    },
-    [db, reload],
+    (id: string) => mutate(() => deleteAccount(db, id)),
+    [db, mutate],
   );
 
   const persistBudget = useCallback(
-    async (input: SaveBudgetInput) => {
-      const id = await saveBudget(db, input);
-      await reload();
-
-      return id;
-    },
-    [db, reload],
+    (input: SaveBudgetInput) => mutate(() => saveBudget(db, input)),
+    [db, mutate],
   );
 
   const removeBudget = useCallback(
-    async (id: string) => {
-      await deleteBudget(db, id);
-      await reload();
-    },
-    [db, reload],
+    (id: string) => mutate(() => deleteBudget(db, id)),
+    [db, mutate],
   );
 
   const persistGoal = useCallback(
-    async (input: SaveGoalInput) => {
-      const id = await saveGoal(db, input);
-      await reload();
-
-      return id;
-    },
-    [db, reload],
+    (input: SaveGoalInput) => mutate(() => saveGoal(db, input)),
+    [db, mutate],
   );
 
   const removeGoal = useCallback(
-    async (id: string) => {
-      await deleteGoal(db, id);
-      await reload();
-    },
-    [db, reload],
+    (id: string) => mutate(() => deleteGoal(db, id)),
+    [db, mutate],
+  );
+
+  const depositGoal = useCallback(
+    (input: DepositGoalInput) => mutate(() => depositGoalTransaction(db, input)),
+    [db, mutate],
   );
 
   const persistTransaction = useCallback(
-    async (input: SaveTransactionInput) => {
-      const id = await saveTransaction(db, input);
-      await reload();
-
-      return id;
-    },
-    [db, reload],
+    (input: SaveTransactionInput) => mutate(() => saveTransaction(db, input)),
+    [db, mutate],
   );
 
   const persistRecurringTransaction = useCallback(
-    async (input: SaveRecurringTransactionInput) => {
-      const id = await saveRecurringTransaction(db, input);
-      await reload();
-
-      return id;
-    },
-    [db, reload],
+    (input: SaveRecurringTransactionInput) => mutate(() => saveRecurringTransaction(db, input)),
+    [db, mutate],
   );
 
   const persistProfile = useCallback(
-    async (input: SaveProfileInput) => {
-      await saveProfile(db, input);
-      await reload();
-    },
-    [db, reload],
+    (input: SaveProfileInput) => mutate(() => saveProfile(db, input)),
+    [db, mutate],
   );
 
   const persistSettings = useCallback(
-    async (input: SaveSettingsInput) => {
-      await saveSettings(db, input);
-      await reload();
-    },
-    [db, reload],
+    (input: SaveSettingsInput) => mutate(() => saveSettings(db, input)),
+    [db, mutate],
   );
 
-
-
   const removeTransaction = useCallback(
-    async (id: string) => {
-      await deleteTransaction(db, id);
-      await reload();
-    },
-    [db, reload],
+    (id: string) => mutate(() => deleteTransaction(db, id)),
+    [db, mutate],
   );
 
   const removeRecurringTransaction = useCallback(
-    async (id: string) => {
-      await deleteRecurringTransaction(db, id);
-      await reload();
-    },
-    [db, reload],
+    (id: string) => mutate(() => deleteRecurringTransaction(db, id)),
+    [db, mutate],
   );
 
   const persistTransfer = useCallback(
-    async (input: TransferInput) => {
-      await transferBetweenAccounts(db, input);
-      await reload();
-    },
-    [db, reload],
+    (input: TransferInput) => mutate(() => transferBetweenAccounts(db, input)),
+    [db, mutate],
   );
 
   return useMemo(() => {
@@ -246,6 +264,7 @@ export function useFinanceSummary() {
       persistAccount,
       persistBudget,
       persistGoal,
+      depositGoal,
       persistProfile,
       persistSettings,
       persistTransaction,
@@ -268,6 +287,7 @@ export function useFinanceSummary() {
     persistAccount,
     persistBudget,
     persistGoal,
+    depositGoal,
     persistProfile,
     persistSettings,
     persistTransaction,

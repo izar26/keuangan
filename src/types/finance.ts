@@ -1,10 +1,13 @@
 export type MoneyFlow = "income" | "expense";
 
+/** Rupiah amount stored as whole integer (no decimals). */
+export type Rupiah = number;
+
 export type Account = {
   id: string;
   name: string;
   institution: string;
-  balance: number;
+  balance: Rupiah;
   accent: "emerald" | "sky" | "amber" | "coral";
   mask: string;
 };
@@ -14,7 +17,7 @@ export type Transaction = {
   title: string;
   merchant: string;
   category: string;
-  amount: number;
+  amount: Rupiah;
   flow: MoneyFlow;
   accountId: string;
   date: string;
@@ -27,7 +30,7 @@ export type RecurringTransaction = {
   title: string;
   merchant: string;
   category: string;
-  amount: number;
+  amount: Rupiah;
   flow: MoneyFlow;
   accountId: string;
   frequency: RecurringFrequency;
@@ -38,16 +41,16 @@ export type Budget = {
   id: string;
   name: string;
   category: string;
-  limit: number;
-  spent: number;
+  limit: Rupiah;
+  spent: Rupiah;
   accent: "emerald" | "sky" | "amber" | "coral";
 };
 
 export type Goal = {
   id: string;
   name: string;
-  target: number;
-  saved: number;
+  target: Rupiah;
+  saved: Rupiah;
   dueDate: string;
 };
 

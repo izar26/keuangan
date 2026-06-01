@@ -11,6 +11,7 @@ import type {
   SaveTransactionInput,
   SaveRecurringTransactionInput,
   TransferInput,
+  DepositGoalInput,
 } from "@/db/finance-repository";
 import type { Account, Budget, Goal, Insight, MoneyFlow, Transaction, RecurringTransaction, RecurringFrequency } from "@/types/finance";
 import type { Profile } from "@/types/finance";
@@ -645,54 +646,60 @@ const frequencyOptions: { label: string; value: RecurringFrequency }[] = [
   { label: "Tahunan", value: "yearly" },
 ];
 
-export function RecurringTransactionFormModal({
-  accounts,
-  onClose,
-  onDelete,
-  onSave,
-  transaction,
-  visible,
-}: RecurringTransactionFormModalProps) {
-  const defaultAccountId = accounts[0]?.id ?? "";
+export function RecurringTransactionFormModal({ accounts, onClose, onDelete, onSave, transaction, visible }: RecurringTransactionFormModalProps) {
   const [title, setTitle] = useState("");
   const [merchant, setMerchant] = useState("");
-  const [category, setCategory] = useState("Tagihan");
+  const [category, setCategory] = useState("");
   const [amount, setAmount] = useState("");
   const [flow, setFlow] = useState<MoneyFlow>("expense");
-  const [accountId, setAccountId] = useState(defaultAccountId);
+  const [accountId, setAccountId] = useState(accounts[0]?.id ?? "");
   const [frequency, setFrequency] = useState<RecurringFrequency>("monthly");
   const [nextDate, setNextDate] = useState(new Date());
   const [showDatePicker, setShowDatePicker] = useState(false);
+  
   const [error, setError] = useState<string | null>(null);
   const [isSaving, setIsSaving] = useState(false);
 
   useEffect(() => {
-    if (!visible) {
-      return;
+    if (!visible) return;
+
+    if (transaction) {
+      setTitle(transaction.title);
+      setMerchant(transaction.merchant);
+      setCategory(transaction.category);
+      setAmount(moneyToInput(transaction.amount));
+      setFlow(transaction.flow);
+      setAccountId(transaction.accountId);
+      setFrequency(transaction.frequency);
+      
+      const parts = transaction.nextDate.split("-");
+      if (parts.length === 3) {
+        setNextDate(new Date(Number(parts[0]), Number(parts[1]) - 1, Number(parts[2])));
+      }
+    } else {
+      setTitle("");
+      setMerchant("");
+      setCategory("");
+      setAmount("");
+      setFlow("expense");
+      setAccountId(accounts[0]?.id ?? "");
+      setFrequency("monthly");
+      setNextDate(new Date());
     }
 
-    setTitle(transaction?.title ?? "");
-    setMerchant(transaction?.merchant ?? "");
-    setCategory(transaction?.category ?? (transaction?.flow === "income" ? "Gaji" : "Tagihan"));
-    setAmount(moneyToInput(transaction?.amount ?? 0));
-    setFlow(transaction?.flow ?? "expense");
-    setAccountId(transaction?.accountId ?? defaultAccountId);
-    setFrequency(transaction?.frequency ?? "monthly");
-    setNextDate(transaction?.nextDate ? new Date(transaction.nextDate) : new Date());
     setError(null);
-  }, [defaultAccountId, transaction, visible]);
-
-  const accountOptions = useMemo(
-    () => accounts.map((account) => ({ label: account.name, value: account.id })),
-    [accounts],
-  );
+  }, [transaction, visible, accounts]);
 
   async function handleSubmit() {
     const parsedAmount = parseMoneyInput(amount);
-    const dateString = nextDate.toISOString().slice(0, 10);
 
-    if (!title.trim() || !merchant.trim() || !category.trim() || parsedAmount <= 0 || !accountId || !isIsoDate(dateString)) {
-      setError("Judul, merchant, kategori, nominal, rekening, dan tanggal wajib valid.");
+    if (!title.trim() || !merchant.trim() || !category.trim() || parsedAmount <= 0) {
+      setError("Judul, merchant, kategori, dan nominal wajib diisi.");
+      return;
+    }
+
+    if (!accountId) {
+      setError("Silakan pilih rekening.");
       return;
     }
 
@@ -701,15 +708,15 @@ export function RecurringTransactionFormModal({
 
     try {
       await onSave({
-        accountId,
-        amount: parsedAmount,
-        category: category.trim(),
-        nextDate: dateString,
-        frequency,
-        flow,
         id: transaction?.id,
-        merchant: merchant.trim(),
         title: title.trim(),
+        merchant: merchant.trim(),
+        category: category.trim(),
+        amount: parsedAmount,
+        flow,
+        accountId,
+        frequency,
+        nextDate: formatDateInput(nextDate),
       });
       await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
       onClose();
@@ -726,43 +733,36 @@ export function RecurringTransactionFormModal({
       isSaving={isSaving}
       onClose={onClose}
       onSubmit={handleSubmit}
-      title={transaction ? "Edit transaksi berulang" : "Tambah transaksi berulang"}
+      title={transaction ? "Edit transaksi berulang" : "Buat transaksi berulang"}
       visible={visible}
     >
-      <SegmentedField label="Arus" onValueChange={setFlow} options={flowOptions} value={flow} />
-      <FormField label="Judul" onChangeText={setTitle} placeholder="Langganan internet" value={title} />
-      <FormField label="Merchant" onChangeText={setMerchant} placeholder="ISP" value={merchant} />
-      <View className="gap-1.5">
-        <Text className="text-sm font-semibold text-ink">Kategori</Text>
-        <ScrollView horizontal showsHorizontalScrollIndicator={false} className="py-1">
-          <View className="flex-row gap-2 px-1">
-            {(flow === "income" ? INCOME_CATEGORIES : EXPENSE_CATEGORIES).map((cat) => (
-              <Pressable
-                key={cat.name}
-                onPress={() => setCategory(cat.name)}
-                className={`flex-row items-center gap-1.5 rounded-full px-3 py-1.5 border ${
-                  category === cat.name ? "border-emerald bg-mint" : "border-line bg-surface"
-                }`}
-              >
-                <Text className="text-sm">{cat.emoji}</Text>
-                <Text className={`text-sm ${category === cat.name ? "font-bold text-emerald" : "text-ink"}`}>
-                  {cat.name}
-                </Text>
-              </Pressable>
-            ))}
-          </View>
-        </ScrollView>
-      </View>
-      <MoneyField label="Nominal" onChangeText={setAmount} placeholder="0" value={amount} />
-      <QuickAmountPicker onSelect={(value) => setAmount(moneyToInput(value))} />
-      {accountOptions.length > 0 ? (
-        <SegmentedField label="Rekening (Sumber)" onValueChange={setAccountId} options={accountOptions} value={accountId} />
-      ) : null}
+      <SegmentedField label="Jenis" onValueChange={setFlow} options={flowOptions} value={flow} />
+      <FormField label="Judul" onChangeText={setTitle} placeholder="Cth: Langganan Netflix" value={title} />
+      <FormField label="Merchant/Pihak" onChangeText={setMerchant} placeholder="Cth: Netflix" value={merchant} />
       
-      <SegmentedField label="Siklus ulangan" onValueChange={setFrequency} options={frequencyOptions} value={frequency} />
+      {/* Fallback to simple FormField if CategoryPicker isn't used here for simplicity */}
+      <FormField label="Kategori" onChangeText={setCategory} placeholder="Hiburan" value={category} />
+      
+      <MoneyField label="Nominal" onChangeText={setAmount} placeholder="0" value={amount} />
+      
+      <QuickAmountPicker onSelect={(val) => setAmount(moneyToInput(val))} />
+      
+      <SegmentedField
+        label="Rekening"
+        onValueChange={setAccountId}
+        options={accounts.map((a) => ({ label: a.name, value: a.id }))}
+        value={accountId}
+      />
+      
+      <SegmentedField
+        label="Frekuensi"
+        onValueChange={setFrequency}
+        options={frequencyOptions}
+        value={frequency}
+      />
 
-      <View className="gap-1.5">
-        <Text className="text-sm font-semibold text-ink">Tanggal Eksekusi Berikutnya</Text>
+      <View className="gap-2">
+        <Text className="text-sm font-semibold text-ink">Tanggal Mulai / Berikutnya</Text>
         <Pressable
           className="h-12 justify-center rounded-lg border border-line bg-surface px-3"
           onPress={() => setShowDatePicker(true)}
@@ -785,6 +785,7 @@ export function RecurringTransactionFormModal({
           />
         )}
       </View>
+      
       {transaction && onDelete ? (
         <DangerAction disabled={isSaving} label="Hapus transaksi berulang" onPress={() => onDelete(transaction.id)} />
       ) : null}
@@ -808,5 +809,101 @@ function QuickAmountPicker({ onSelect }: { onSelect: (amount: number) => void })
         ))}
       </View>
     </View>
+  );
+}
+
+export type GoalDepositModalProps = {
+  accounts: Account[];
+  goal?: Goal | null;
+  onClose: () => void;
+  onDeposit: (input: DepositGoalInput) => Promise<unknown>;
+  visible: boolean;
+};
+
+export function GoalDepositModal({ accounts, goal, onClose, onDeposit, visible }: GoalDepositModalProps) {
+  const [deposit, setDeposit] = useState("");
+  const [accountId, setAccountId] = useState(accounts[0]?.id ?? "");
+  const [error, setError] = useState<string | null>(null);
+  const [isSaving, setIsSaving] = useState(false);
+
+  useEffect(() => {
+    if (!visible) return;
+    setDeposit("");
+    setAccountId(accounts[0]?.id ?? "");
+    setError(null);
+  }, [visible, accounts]);
+
+  async function handleSubmit() {
+    const parsedAmount = parseMoneyInput(deposit);
+
+    if (parsedAmount <= 0) {
+      setError("Nominal setor harus lebih dari 0.");
+      return;
+    }
+
+    if (!accountId) {
+      setError("Silakan pilih rekening sumber dana.");
+      return;
+    }
+
+    if (!goal) return;
+
+    setIsSaving(true);
+    setError(null);
+
+    try {
+      await onDeposit({
+        goalId: goal.id,
+        amount: parsedAmount,
+        accountId: accountId,
+      });
+      await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+      onClose();
+    } catch (cause) {
+      setError(getErrorMessage(cause));
+    } finally {
+      setIsSaving(false);
+    }
+  }
+
+  if (!goal) return null;
+
+  return (
+    <FormModal
+      error={error}
+      isSaving={isSaving}
+      onClose={onClose}
+      onSubmit={handleSubmit}
+      title={`Setor ke ${goal.name}`}
+      visible={visible}
+    >
+      <MoneyField label="Nominal setor" onChangeText={setDeposit} placeholder="10.000" value={deposit} />
+      
+      <View className="mb-1">
+        <ScrollView horizontal showsHorizontalScrollIndicator={false} className="mb-3">
+          <View className="flex-row gap-2 px-1">
+            {quickAmounts.map((amt) => (
+              <Pressable
+                key={amt}
+                onPress={() => setDeposit(moneyToInput(amt))}
+                className="rounded-full bg-surface px-4 py-2"
+                style={{ borderWidth: 1, borderColor: "#E5E5EA" }}
+              >
+                <Text className="text-sm font-medium text-ink">
+                  {formatCurrency(amt, true)}
+                </Text>
+              </Pressable>
+            ))}
+          </View>
+        </ScrollView>
+      </View>
+
+      <SegmentedField
+        label="Sumber dana"
+        onValueChange={setAccountId}
+        options={accounts.map((a) => ({ label: a.name, value: a.id }))}
+        value={accountId}
+      />
+    </FormModal>
   );
 }

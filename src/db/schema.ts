@@ -1,6 +1,6 @@
 import type { SQLiteDatabase } from "expo-sqlite";
 
-const DATABASE_VERSION = 6;
+const DATABASE_VERSION = 7;
 
 type VersionRow = {
   user_version: number;
@@ -10,9 +10,11 @@ export async function migrateDatabase(db: SQLiteDatabase) {
   await db.execAsync("PRAGMA foreign_keys = ON");
 
   const row = await db.getFirstAsync<VersionRow>("PRAGMA user_version");
-  const currentVersion = row?.user_version ?? 0;
+  let currentVersion = row?.user_version ?? 0;
 
   if (currentVersion >= DATABASE_VERSION) {
+    const { processRecurringTransactions } = await import("@/db/finance-repository");
+    await processRecurringTransactions(db);
     return;
   }
 
@@ -100,9 +102,10 @@ export async function migrateDatabase(db: SQLiteDatabase) {
     `);
 
     await seedDefaults(db);
+    currentVersion = 5; // Fast-forward to v5 since the above represents the v5 state
   }
 
-  if (currentVersion > 0 && currentVersion < 6) {
+  if (currentVersion === 5) {
     // Migration from v5 to v6
     // Drop old manual insights and monthly_spending
     await db.execAsync(`
@@ -124,9 +127,24 @@ export async function migrateDatabase(db: SQLiteDatabase) {
         FOREIGN KEY (account_id) REFERENCES accounts(id) ON DELETE RESTRICT
       );
     `);
+    currentVersion = 6;
+  }
+
+  if (currentVersion === 6) {
+    // Migration from v6 to v7
+    // Create composite indexes to speed up dashboard queries
+    await db.execAsync(`
+      CREATE INDEX IF NOT EXISTS idx_transactions_account_date ON transactions(account_id, date DESC);
+      CREATE INDEX IF NOT EXISTS idx_transactions_flow_date ON transactions(flow, date DESC);
+    `);
+    currentVersion = 7;
   }
 
   await db.execAsync(`PRAGMA user_version = ${DATABASE_VERSION}`);
+  
+  // App Boot Routine: Process recurring transactions after DB is ready
+  const { processRecurringTransactions } = await import("@/db/finance-repository");
+  await processRecurringTransactions(db);
 }
 
 async function seedDefaults(db: SQLiteDatabase) {

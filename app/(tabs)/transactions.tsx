@@ -1,7 +1,7 @@
 import { useMemo, useState } from "react";
 import { Pressable, ScrollView, Text, TextInput, View } from "react-native";
 import { FlashList } from "@shopify/flash-list";
-import { CalendarDays, Filter, Plus, ReceiptText, RefreshCw, Search, ArrowDownUp } from "lucide-react-native";
+import { ArrowDownUp, CalendarDays, ChevronLeft, ChevronRight, Filter, Plus, ReceiptText, RefreshCw, Search } from "lucide-react-native";
 
 import { EXPENSE_CATEGORIES, INCOME_CATEGORIES } from "@/constants/categories";
 
@@ -13,18 +13,34 @@ import { SectionHeader } from "@/components/section-header";
 import { TransactionRow } from "@/components/transaction-row";
 import { colors } from "@/constants/theme";
 import { useFinanceSummary } from "@/hooks/use-finance-summary";
-import { formatMonthLabel } from "@/lib/forms";
+import { getMonthKey } from "@/lib/forms";
 import type { MoneyFlow, Transaction } from "@/types/finance";
 
 type FlowFilter = "all" | MoneyFlow;
-type PeriodFilter = "all" | "current-month";
+type PeriodFilter = "all" | "month";
 type SortFilter = "newest" | "oldest" | "highest" | "lowest";
 type AmountFilter = "all" | "over-50k" | "over-100k";
+
+function shiftMonth(monthKey: string, delta: number) {
+  const [year, month] = monthKey.split("-").map(Number);
+  const date = new Date(year, month - 1 + delta, 1);
+
+  return getMonthKey(date);
+}
+
+function formatMonthDisplay(monthKey: string) {
+  const [year, month] = monthKey.split("-").map(Number);
+  const date = new Date(year, month - 1, 1);
+
+  return new Intl.DateTimeFormat("id-ID", { month: "short", year: "numeric" }).format(date);
+}
 
 export default function TransactionsScreen() {
   const appAlert = useAppAlert();
   const [flowFilter, setFlowFilter] = useState<FlowFilter>("all");
-  const [periodFilter, setPeriodFilter] = useState<PeriodFilter>("current-month");
+  const currentMonthKey = getMonthKey();
+  const [periodFilter, setPeriodFilter] = useState<PeriodFilter>("month");
+  const [selectedMonthKey, setSelectedMonthKey] = useState(currentMonthKey);
   const [query, setQuery] = useState("");
   const [categoryFilter, setCategoryFilter] = useState("all");
   const [accountFilter, setAccountFilter] = useState("all");
@@ -33,11 +49,20 @@ export default function TransactionsScreen() {
   const [selectedTransaction, setSelectedTransaction] = useState<Transaction | null>(null);
   const [showForm, setShowForm] = useState(false);
   const summary = useFinanceSummary();
-  const currentMonthLabel = formatMonthLabel();
+  const selectedMonthLabel = formatMonthDisplay(selectedMonthKey);
+  const canGoNextMonth = selectedMonthKey < currentMonthKey;
 
   const allCategories = useMemo(() => {
-    return Array.from(new Set([...EXPENSE_CATEGORIES, ...INCOME_CATEGORIES].map(c => c.name)));
-  }, []);
+    return Array.from(
+      new Set([
+        ...EXPENSE_CATEGORIES.map((category) => category.name),
+        ...INCOME_CATEGORIES.map((category) => category.name),
+        ...summary.transactions.map((transaction) => transaction.category),
+        ...summary.budgets.map((budget) => budget.category),
+        ...summary.recurringTransactions.map((transaction) => transaction.category),
+      ].filter(Boolean)),
+    ).sort((a, b) => a.localeCompare(b, "id-ID"));
+  }, [summary.budgets, summary.recurringTransactions, summary.transactions]);
 
   const filteredTransactions = useMemo(() => {
     const normalizedQuery = query.trim().toLowerCase();
@@ -50,7 +75,7 @@ export default function TransactionsScreen() {
           .toLowerCase()
           .includes(normalizedQuery);
       const matchesFlow = flowFilter === "all" || transaction.flow === flowFilter;
-      const matchesPeriod = periodFilter === "all" || transaction.date.startsWith(summary.currentMonthKey);
+      const matchesPeriod = periodFilter === "all" || transaction.date.startsWith(selectedMonthKey);
       const matchesCategory = categoryFilter === "all" || transaction.category === categoryFilter;
       const matchesAccount = accountFilter === "all" || transaction.accountId === accountFilter;
       const matchesAmount =
@@ -70,7 +95,7 @@ export default function TransactionsScreen() {
     }
 
     return result;
-  }, [accountFilter, amountFilter, flowFilter, periodFilter, categoryFilter, sortFilter, query, summary.currentMonthKey, summary.transactions]);
+  }, [accountFilter, amountFilter, flowFilter, periodFilter, categoryFilter, sortFilter, query, selectedMonthKey, summary.transactions]);
 
   function cycleFlowFilter() {
     setFlowFilter((current) => {
@@ -167,8 +192,8 @@ export default function TransactionsScreen() {
           <Button
             className="flex-1"
             icon={CalendarDays}
-            label={periodFilter === "current-month" ? currentMonthLabel : "Semua waktu"}
-            onPress={() => setPeriodFilter((current) => (current === "current-month" ? "all" : "current-month"))}
+            label={periodFilter === "month" ? selectedMonthLabel : "Semua"}
+            onPress={() => setPeriodFilter((current) => (current === "month" ? "all" : "month"))}
             variant="secondary"
           />
           <Button
@@ -179,6 +204,29 @@ export default function TransactionsScreen() {
             variant="secondary"
           />
         </View>
+
+        {periodFilter === "month" ? (
+          <View className="flex-row items-center gap-2 rounded-lg border border-line bg-surface p-2">
+            <Pressable
+              className="h-10 w-10 items-center justify-center rounded-lg bg-canvas"
+              onPress={() => setSelectedMonthKey((current) => shiftMonth(current, -1))}
+            >
+              <ChevronLeft color={colors.ink} size={19} strokeWidth={2.5} />
+            </Pressable>
+            <View className="flex-1 items-center gap-0.5">
+              <Text className="text-xs font-bold text-muted">Bulan transaksi</Text>
+              <Text className="text-base font-bold text-ink">{selectedMonthLabel}</Text>
+            </View>
+            <Pressable
+              className="h-10 w-10 items-center justify-center rounded-lg bg-canvas"
+              disabled={!canGoNextMonth}
+              onPress={() => setSelectedMonthKey((current) => shiftMonth(current, 1))}
+              style={!canGoNextMonth ? { opacity: 0.35 } : undefined}
+            >
+              <ChevronRight color={colors.ink} size={19} strokeWidth={2.5} />
+            </Pressable>
+          </View>
+        ) : null}
 
         <ScrollView horizontal showsHorizontalScrollIndicator={false} className="py-1">
           <View className="flex-row gap-2 px-1">

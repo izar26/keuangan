@@ -19,17 +19,19 @@ export function BudgetChallengeCard({ budgets, transactions }: BudgetChallengeCa
     .map((budget) => ({ ...budget, progress: budget.spent / budget.limit }))
     .sort((a, b) => b.progress - a.progress)[0];
   const challenge =
-    riskyBudget && riskyBudget.progress >= 0.7
-      ? `Tahan ${riskyBudget.category} di bawah ${formatCurrency(Math.max(riskyBudget.limit - riskyBudget.spent, 0), true)} minggu ini.`
-      : "Jaga transaksi harian tetap tercatat minimal 5 hari minggu ini.";
+    riskyBudget && riskyBudget.progress >= 1
+      ? `${riskyBudget.category} sudah overbudget! Defisit ${formatCurrency(riskyBudget.spent - riskyBudget.limit, true)}.`
+      : riskyBudget && riskyBudget.progress >= 0.7
+        ? `${riskyBudget.category} paling dekat limit. Sisa jatahnya ${formatCurrency(riskyBudget.limit - riskyBudget.spent, true)}.`
+        : "Catat transaksi harian supaya sisa jatah per kategori tetap akurat.";
 
   return (
     <Animated.View entering={FadeInUp.delay(80).duration(360).springify()}>
       <Card className="gap-4">
         <View className="flex-row items-start justify-between">
           <View className="gap-1">
-            <Text className="text-sm font-bold text-amber">Weekly challenge</Text>
-            <Text className="text-xl font-bold text-ink">{streak} hari streak</Text>
+            <Text className="text-sm font-bold text-amber">Misi budget</Text>
+            <Text className="text-xl font-bold text-ink">{streak} hari catat rutin</Text>
           </View>
           <View className="h-11 w-11 items-center justify-center rounded-xl bg-canvas">
             {streak >= 3 ? (

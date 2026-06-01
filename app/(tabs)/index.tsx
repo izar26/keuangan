@@ -115,17 +115,17 @@ export default function DashboardScreen() {
       <BudgetChallengeCard budgets={summary.budgets} transactions={summary.transactions} />
 
       <View className="gap-3">
-        <SectionHeader actionLabel="Detail" icon={PiggyBank} onActionPress={() => router.push("/budgets")} title="Budget aktif" />
+        <SectionHeader actionLabel="Atur" icon={PiggyBank} onActionPress={() => router.push("/budgets")} title="Sisa jatah kategori" />
         {!isInitialLoading && !summary.error && summary.budgets.length === 0 ? (
           <StateView
             actionLabel="Tambah budget"
-            caption="Buat budget pertama untuk memantau pengeluaran bulan ini."
+            caption="Budget adalah jatah belanja per kategori. Setelah dibuat, beranda bisa hitung jatah aman harian."
             icon={PiggyBank}
             onActionPress={() => {
               setSelectedBudget(null);
               setShowBudgetForm(true);
             }}
-            title="Belum ada budget"
+            title="Belum ada jatah belanja"
           />
         ) : null}
         {summary.budgets.slice(0, 2).map((budget) => (

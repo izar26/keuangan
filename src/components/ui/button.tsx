@@ -43,7 +43,9 @@ export function Button({ className, disabled, icon: Icon, label, onPress, varian
       {...props}
     >
       {Icon ? <Icon color={variant === "primary" ? colors.surface : colors.ink} size={18} strokeWidth={2.3} /> : null}
-      <Text className={cn("font-semibold", labelVariants[variant])}>{label}</Text>
+      <Text adjustsFontSizeToFit className={cn("font-semibold", labelVariants[variant])} minimumFontScale={0.82} numberOfLines={1}>
+        {label}
+      </Text>
     </Pressable>
   );
 }

@@ -28,6 +28,23 @@ export function formatDate(value: string) {
   return dateFormatter.format(new Date(value));
 }
 
+export function formatFullDate(value: Date | string) {
+  const date = typeof value === "string" ? new Date(value) : value;
+  if (!date || Number.isNaN(date.getTime())) {
+    return "Tanggal tidak valid";
+  }
+  try {
+    return new Intl.DateTimeFormat("id-ID", {
+      weekday: "long",
+      day: "numeric",
+      month: "long",
+      year: "numeric",
+    }).format(date);
+  } catch (e) {
+    return date.toDateString();
+  }
+}
+
 export function getGreeting() {
   const hour = new Date().getHours();
 
