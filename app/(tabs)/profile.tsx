@@ -1,11 +1,12 @@
 import { useState } from "react";
-import { Alert, Text, View } from "react-native";
-import { Download, RefreshCw, UserRound, Repeat, Plus, Moon, Sun } from "lucide-react-native";
+import { Text, View } from "react-native";
+import { Download, RefreshCw, UserRound, Plus, Moon, Sun, LockKeyhole, Shield } from "lucide-react-native";
 import { useColorScheme } from "nativewind";
 
 import { ProfileFormModal, RecurringTransactionFormModal } from "@/components/forms/finance-modals";
 import type { RecurringTransaction } from "@/types/finance";
 import { ScreenShell } from "@/components/screen-shell";
+import { useAppAlert } from "@/components/ui/app-alert";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { StateView } from "@/components/ui/state-view";
@@ -14,6 +15,7 @@ import { useFinanceSummary } from "@/hooks/use-finance-summary";
 import { exportFinanceData } from "@/lib/export";
 
 export default function ProfileScreen() {
+  const appAlert = useAppAlert();
   const [showProfileForm, setShowProfileForm] = useState(false);
   const [showRecurringForm, setShowRecurringForm] = useState(false);
   const [selectedRecurring, setSelectedRecurring] = useState<RecurringTransaction | null>(null);
@@ -37,7 +39,11 @@ export default function ProfileScreen() {
         recurringTransactions: summary.recurringTransactions,
       });
     } catch (cause) {
-      Alert.alert("Ekspor gagal", cause instanceof Error ? cause.message : "Coba lagi nanti.");
+      appAlert.show({
+        message: cause instanceof Error ? cause.message : "Coba lagi nanti.",
+        title: "Ekspor gagal",
+        tone: "danger",
+      });
     } finally {
       setIsExporting(false);
     }
@@ -90,6 +96,25 @@ export default function ProfileScreen() {
       </View>
 
       <View className="gap-3">
+        <Text className="text-base font-bold text-ink">Privasi</Text>
+        <Button
+          icon={LockKeyhole}
+          label={summary.settings.securityLock ? "App lock aktif" : "Aktifkan app lock"}
+          onPress={() => summary.persistSettings({ securityLock: !summary.settings.securityLock })}
+          variant="secondary"
+        />
+        <Button
+          icon={Shield}
+          label={summary.settings.localPrivacyMode ? "Proteksi screenshot aktif" : "Aktifkan proteksi screenshot"}
+          onPress={() => summary.persistSettings({ localPrivacyMode: !summary.settings.localPrivacyMode })}
+          variant="secondary"
+        />
+        <Text className="text-xs leading-4 text-muted">
+          App lock memakai biometrik perangkat. Proteksi screenshot menyembunyikan data di app switcher dan memblokir screen capture saat aktif.
+        </Text>
+      </View>
+
+      <View className="gap-3">
         <View className="flex-row items-center justify-between">
           <Text className="text-base font-bold text-ink">Transaksi Berulang</Text>
           <Button 
@@ -98,7 +123,11 @@ export default function ProfileScreen() {
             variant="secondary" 
             onPress={() => {
               if (summary.accounts.length === 0) {
-                Alert.alert("Belum ada rekening", "Tambah rekening dulu.");
+                appAlert.show({
+                  message: "Tambah rekening dulu supaya transaksi berulang punya sumber dana.",
+                  title: "Belum ada rekening",
+                  tone: "warning",
+                });
                 return;
               }
               setSelectedRecurring(null);
@@ -156,4 +185,3 @@ export default function ProfileScreen() {
     </ScreenShell>
   );
 }
-

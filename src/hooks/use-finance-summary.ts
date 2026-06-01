@@ -27,6 +27,7 @@ import {
   type TransferInput,
 } from "@/db/finance-repository";
 import { getMonthKey } from "@/lib/forms";
+import { updateBudgetPulseWidget } from "@/lib/widget-updates";
 
 const emptySnapshot: FinanceSnapshot = {
   accounts: [],
@@ -58,7 +59,9 @@ export function useFinanceSummary() {
     setError(null);
 
     try {
-      setSnapshot(await getFinanceSnapshot(db));
+      const nextSnapshot = await getFinanceSnapshot(db);
+      updateBudgetPulseWidget(nextSnapshot);
+      setSnapshot(nextSnapshot);
     } catch (cause) {
       setError(cause instanceof Error ? cause : new Error("Gagal memuat data keuangan."));
     } finally {
@@ -75,6 +78,7 @@ export function useFinanceSummary() {
 
       try {
         const nextSnapshot = await getFinanceSnapshot(db);
+        updateBudgetPulseWidget(nextSnapshot);
 
         if (isMounted) {
           setSnapshot(nextSnapshot);

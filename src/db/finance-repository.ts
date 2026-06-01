@@ -253,6 +253,50 @@ function generateAutoInsights(transactions: TransactionRow[], currentMonthKey?: 
     });
   }
 
+  const previousCategoryMap = new Map<string, number>();
+  for (const trx of transactions) {
+    if (trx.flow !== "expense") {
+      continue;
+    }
+
+    if (trx.date.startsWith(prevMonthKey)) {
+      previousCategoryMap.set(trx.category, (previousCategoryMap.get(trx.category) ?? 0) + trx.amount);
+    }
+  }
+
+  for (const [category, amount] of categoryMap.entries()) {
+    const previousAmount = previousCategoryMap.get(category) ?? 0;
+    if (previousAmount > 0 && amount > previousAmount * 1.25) {
+      const percentage = Math.round(((amount - previousAmount) / previousAmount) * 100);
+      insights.push({
+        id: `insight-category-${category.toLowerCase().replace(/\s+/g, "-")}`,
+        title: `${category} lagi naik`,
+        value: `Naik ${percentage}%`,
+        trend: "up",
+        caption: `Kategori ini lebih tinggi dari bulan lalu. Cocok buat dipantau sebelum akhir bulan.`,
+      });
+      break;
+    }
+  }
+
+  const paydayWindowExpense = transactions
+    .filter((trx) => trx.flow === "expense" && trx.date.startsWith(monthKey))
+    .filter((trx) => {
+      const day = Number(trx.date.slice(8, 10));
+      return day >= 25 && day <= 28;
+    })
+    .reduce((sum, trx) => sum + trx.amount, 0);
+
+  if (paydayWindowExpense > 0) {
+    insights.push({
+      id: "insight-payday-window",
+      title: "Rawan boros akhir bulan",
+      value: `Rp ${(paydayWindowExpense / 1000).toLocaleString("id-ID")}rb`,
+      trend: "flat",
+      caption: "Tanggal 25-28 punya pengeluaran aktif. Set reminder kecil sebelum payday.",
+    });
+  }
+
   return insights;
 }
 

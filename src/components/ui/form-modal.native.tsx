@@ -1,6 +1,8 @@
 import type { PropsWithChildren } from "react";
-import { Modal, Pressable, ScrollView, Text, TextInput, View } from "react-native";
+import { Modal, Pressable, Text, TextInput, View } from "react-native";
 import { X } from "lucide-react-native";
+import { KeyboardAwareScrollView, KeyboardStickyView } from "react-native-keyboard-controller";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { colors } from "@/constants/theme";
 import { cn } from "@/lib/cn";
@@ -46,10 +48,12 @@ export function FormModal({
   title,
   visible,
 }: FormModalProps) {
+  const insets = useSafeAreaInsets();
+
   return (
     <Modal animationType="slide" onRequestClose={onClose} transparent visible={visible}>
       <View className="flex-1 justify-end bg-black/40">
-        <View className="max-h-[88%] rounded-t-2xl bg-canvas" style={{ height: "88%" }}>
+        <View className="overflow-hidden rounded-t-2xl bg-canvas" style={{ height: "94%" }}>
           <View className="flex-row items-center justify-between border-b border-line px-5 py-4">
             <Text className="text-lg font-bold text-ink">{title}</Text>
             <Pressable className="h-10 w-10 items-center justify-center rounded-full bg-surface" onPress={onClose}>
@@ -57,14 +61,22 @@ export function FormModal({
             </Pressable>
           </View>
 
-          <ScrollView contentContainerClassName="gap-4 px-5 pb-28 pt-5" keyboardShouldPersistTaps="handled" style={{ flex: 1 }}>
+          <KeyboardAwareScrollView
+            bottomOffset={132 + insets.bottom}
+            contentContainerStyle={{ gap: 16, paddingBottom: 144 + insets.bottom, paddingHorizontal: 20, paddingTop: 20 }}
+            keyboardShouldPersistTaps="handled"
+            showsVerticalScrollIndicator={false}
+            style={{ flex: 1 }}
+          >
             {children}
-          </ScrollView>
+          </KeyboardAwareScrollView>
 
-          <View className="gap-3 border-t border-line bg-canvas px-5 pb-5 pt-3">
-            {error ? <Text className="text-sm font-semibold text-coral">{error}</Text> : null}
-            <Button disabled={isSaving} label={isSaving ? "Menyimpan..." : submitLabel} onPress={onSubmit} />
-          </View>
+          <KeyboardStickyView offset={{ closed: 0, opened: -8 }}>
+            <View className="gap-3 border-t border-line bg-canvas px-5 pt-3" style={{ paddingBottom: 20 + insets.bottom }}>
+              {error ? <Text className="text-sm font-semibold text-coral">{error}</Text> : null}
+              <Button disabled={isSaving} label={isSaving ? "Menyimpan..." : submitLabel} onPress={onSubmit} />
+            </View>
+          </KeyboardStickyView>
         </View>
       </View>
     </Modal>
@@ -152,16 +164,10 @@ export function MoneyField({ label, onChangeText, value, placeholder }: Omit<For
         value={value}
       />
       <View className="flex-row gap-2">
-        <Pressable 
-          className="rounded-full border border-line bg-surface px-3 py-1.5" 
-          onPress={() => appendZeros(3)}
-        >
+        <Pressable className="rounded-full border border-line bg-surface px-3 py-1.5" onPress={() => appendZeros(3)}>
           <Text className="text-xs font-semibold text-ink">+000</Text>
         </Pressable>
-        <Pressable 
-          className="rounded-full border border-line bg-surface px-3 py-1.5" 
-          onPress={() => appendZeros(6)}
-        >
+        <Pressable className="rounded-full border border-line bg-surface px-3 py-1.5" onPress={() => appendZeros(6)}>
           <Text className="text-xs font-semibold text-ink">+000.000</Text>
         </Pressable>
       </View>

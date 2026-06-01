@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { Alert, Platform, Pressable, ScrollView, Text, View } from "react-native";
-import DateTimePicker from "@react-native-community/datetimepicker";
+import { Platform, Pressable, ScrollView, Text, View } from "react-native";
+import * as Haptics from "expo-haptics";
 
 import { EXPENSE_CATEGORIES, INCOME_CATEGORIES } from "@/constants/categories";
 
@@ -15,8 +15,11 @@ import type {
 import type { Account, Budget, Goal, Insight, MoneyFlow, Transaction, RecurringTransaction, RecurringFrequency } from "@/types/finance";
 import type { Profile } from "@/types/finance";
 import { formatDateInput, isIsoDate, moneyToInput, parseMoneyInput } from "@/lib/forms";
+import { formatCurrency } from "@/lib/format";
+import { useAppAlert } from "@/components/ui/app-alert";
 import { Button } from "@/components/ui/button";
 import { FormField, FormModal, SegmentedField, MoneyField } from "@/components/ui/form-modal";
+import DateTimePicker from "@/components/ui/native-date-picker";
 
 type Accent = Account["accent"];
 
@@ -31,6 +34,8 @@ const flowOptions: { label: string; value: MoneyFlow }[] = [
   { label: "Masuk", value: "income" },
   { label: "Keluar", value: "expense" },
 ];
+
+const quickAmounts = [10000, 25000, 50000, 100000, 250000];
 
 type AccountFormModalProps = {
   account?: Account | null;
@@ -122,6 +127,7 @@ export function AccountFormModal({ account, onClose, onDelete, onSave, visible }
         mask: mask.trim(),
         name: name.trim(),
       });
+      await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
       onClose();
     } catch (cause) {
       setError(getErrorMessage(cause));
@@ -190,6 +196,7 @@ export function BudgetFormModal({ budget, onClose, onDelete, onSave, visible }: 
         limit: parsedLimit,
         name: name.trim(),
       });
+      await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
       onClose();
     } catch (cause) {
       setError(getErrorMessage(cause));
@@ -275,6 +282,7 @@ export function GoalFormModal({ goal, onClose, onDelete, onSave, visible }: Goal
 
     try {
       await onSave({ dueDate, id: goal?.id, name: name.trim(), saved: parsedSaved, target: parsedTarget });
+      await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
       onClose();
     } catch (cause) {
       setError(getErrorMessage(cause));
@@ -365,6 +373,7 @@ export function TransactionFormModal({
         merchant: merchant.trim(),
         title: title.trim(),
       });
+      await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
       onClose();
     } catch (cause) {
       setError(getErrorMessage(cause));
@@ -407,6 +416,7 @@ export function TransactionFormModal({
         </ScrollView>
       </View>
       <MoneyField label="Nominal" onChangeText={setAmount} placeholder="0" value={amount} />
+      <QuickAmountPicker onSelect={(value) => setAmount(moneyToInput(value))} />
       {accountOptions.length > 0 ? (
         <SegmentedField label="Rekening" onValueChange={setAccountId} options={accountOptions} value={accountId} />
       ) : null}
@@ -420,14 +430,14 @@ export function TransactionFormModal({
         </Pressable>
         {showDatePicker && (
           <DateTimePicker
+            accentColor="#1F8A5B"
             display="default"
             mode="date"
-            onChange={(event, selectedDate) => {
+            onDismiss={() => setShowDatePicker(false)}
+            onValueChange={(_, selectedDate) => {
+              setDate(selectedDate);
               if (Platform.OS === "android") {
                 setShowDatePicker(false);
-              }
-              if (selectedDate) {
-                setDate(selectedDate);
               }
             }}
             value={date}
@@ -483,6 +493,7 @@ export function TransferFormModal({ accounts, onClose, onSave, visible }: Transf
 
     try {
       await onSave({ amount: parsedAmount, fromAccountId, toAccountId });
+      await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
       onClose();
     } catch (cause) {
       setError(getErrorMessage(cause));
@@ -504,6 +515,7 @@ export function TransferFormModal({ accounts, onClose, onSave, visible }: Transf
       <SegmentedField label="Dari" onValueChange={setFromAccountId} options={accountOptions} value={fromAccountId} />
       <SegmentedField label="Ke" onValueChange={setToAccountId} options={accountOptions} value={toAccountId} />
       <MoneyField label="Nominal" onChangeText={setAmount} placeholder="0" value={amount} />
+      <QuickAmountPicker onSelect={(value) => setAmount(moneyToInput(value))} />
     </FormModal>
   );
 }
@@ -535,6 +547,7 @@ export function ProfileFormModal({ onClose, onSave, profile, visible }: ProfileF
 
     try {
       await onSave({ displayName: displayName.trim(), planLabel: planLabel.trim() });
+      await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
       onClose();
     } catch (cause) {
       setError(getErrorMessage(cause));
@@ -559,6 +572,7 @@ export function ProfileFormModal({ onClose, onSave, profile, visible }: ProfileF
 }
 
 function DangerAction({ disabled, label, onPress }: { disabled?: boolean; label: string; onPress: () => Promise<unknown> }) {
+  const appAlert = useAppAlert();
   const [isDeleting, setIsDeleting] = useState(false);
   const mountedRef = useRef(true);
 
@@ -569,25 +583,33 @@ function DangerAction({ disabled, label, onPress }: { disabled?: boolean; label:
   }, []);
 
   async function handlePress() {
-    Alert.alert(label, "Data yang dihapus tidak bisa dikembalikan.", [
-      { style: "cancel", text: "Batal" },
-      {
-        onPress: async () => {
-          setIsDeleting(true);
-          try {
-            await onPress();
-          } catch (cause) {
-            Alert.alert("Gagal menghapus", getErrorMessage(cause));
-          } finally {
-            if (mountedRef.current) {
-              setIsDeleting(false);
-            }
-          }
-        },
-        style: "destructive",
-        text: "Hapus",
-      },
-    ]);
+    const confirmed = await appAlert.confirm({
+      cancelLabel: "Batal",
+      confirmLabel: "Hapus",
+      message: "Data yang dihapus tidak bisa dikembalikan.",
+      title: label,
+      tone: "danger",
+    });
+
+    if (!confirmed) {
+      return;
+    }
+
+    setIsDeleting(true);
+    try {
+      await onPress();
+      await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+    } catch (cause) {
+      await appAlert.show({
+        message: getErrorMessage(cause),
+        title: "Gagal menghapus",
+        tone: "danger",
+      });
+    } finally {
+      if (mountedRef.current) {
+        setIsDeleting(false);
+      }
+    }
   }
 
   return (
@@ -600,7 +622,7 @@ function DangerAction({ disabled, label, onPress }: { disabled?: boolean; label:
         variant="secondary"
       />
     </View>
-  );
+        );
 }
 
 function getErrorMessage(cause: unknown) {
@@ -689,6 +711,7 @@ export function RecurringTransactionFormModal({
         merchant: merchant.trim(),
         title: title.trim(),
       });
+      await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
       onClose();
     } catch (cause) {
       setError(getErrorMessage(cause));
@@ -731,6 +754,7 @@ export function RecurringTransactionFormModal({
         </ScrollView>
       </View>
       <MoneyField label="Nominal" onChangeText={setAmount} placeholder="0" value={amount} />
+      <QuickAmountPicker onSelect={(value) => setAmount(moneyToInput(value))} />
       {accountOptions.length > 0 ? (
         <SegmentedField label="Rekening (Sumber)" onValueChange={setAccountId} options={accountOptions} value={accountId} />
       ) : null}
@@ -747,14 +771,14 @@ export function RecurringTransactionFormModal({
         </Pressable>
         {showDatePicker && (
           <DateTimePicker
+            accentColor="#1F8A5B"
             display="default"
             mode="date"
-            onChange={(event, selectedDate) => {
+            onDismiss={() => setShowDatePicker(false)}
+            onValueChange={(_, selectedDate) => {
+              setNextDate(selectedDate);
               if (Platform.OS === "android") {
                 setShowDatePicker(false);
-              }
-              if (selectedDate) {
-                setNextDate(selectedDate);
               }
             }}
             value={nextDate}
@@ -765,5 +789,24 @@ export function RecurringTransactionFormModal({
         <DangerAction disabled={isSaving} label="Hapus transaksi berulang" onPress={() => onDelete(transaction.id)} />
       ) : null}
     </FormModal>
+  );
+}
+
+function QuickAmountPicker({ onSelect }: { onSelect: (amount: number) => void }) {
+  return (
+    <View className="gap-2">
+      <Text className="text-sm font-semibold text-ink">Nominal cepat</Text>
+      <View className="flex-row flex-wrap gap-2">
+        {quickAmounts.map((amount) => (
+          <Pressable
+            className="rounded-full border border-line bg-surface px-3 py-2"
+            key={amount}
+            onPress={() => onSelect(amount)}
+          >
+            <Text className="text-xs font-bold text-ink">{formatCurrency(amount, true)}</Text>
+          </Pressable>
+        ))}
+      </View>
+    </View>
   );
 }

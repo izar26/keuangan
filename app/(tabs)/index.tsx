@@ -1,17 +1,20 @@
 import { useState } from "react";
 import { useRouter } from "expo-router";
-import { Alert, Text, View } from "react-native";
+import { Text, View } from "react-native";
 import { Landmark, PiggyBank, ReceiptText, RefreshCw, WalletCards } from "lucide-react-native";
 
 import { AccountCard } from "@/components/account-card";
 import { BalanceCard } from "@/components/balance-card";
+import { BudgetChallengeCard } from "@/components/budget-challenge-card";
 import { BudgetCard } from "@/components/budget-card";
+import { DailyMoneyPulse } from "@/components/daily-money-pulse";
 import { AccountFormModal, BudgetFormModal, TransactionFormModal, TransferFormModal } from "@/components/forms/finance-modals";
 import { InsightCard } from "@/components/insight-card";
 import { MetricCard } from "@/components/metric-card";
 import { ScreenShell } from "@/components/screen-shell";
 import { SectionHeader } from "@/components/section-header";
 import { TransactionRow } from "@/components/transaction-row";
+import { useAppAlert } from "@/components/ui/app-alert";
 import { StateView } from "@/components/ui/state-view";
 import { useFinanceSummary } from "@/hooks/use-finance-summary";
 import { formatMonthLabel } from "@/lib/forms";
@@ -20,6 +23,7 @@ import type { Account, Budget, Transaction } from "@/types/finance";
 
 export default function DashboardScreen() {
   const router = useRouter();
+  const appAlert = useAppAlert();
   const summary = useFinanceSummary();
   const [selectedAccount, setSelectedAccount] = useState<Account | null>(null);
   const [selectedBudget, setSelectedBudget] = useState<Budget | null>(null);
@@ -58,7 +62,11 @@ export default function DashboardScreen() {
           cashflow={summary.netCashflow}
           onAddTransaction={() => {
             if (summary.accounts.length === 0) {
-              Alert.alert("Belum ada rekening", "Silakan tambah rekening terlebih dahulu sebelum mencatat transaksi.");
+              appAlert.show({
+                message: "Tambahkan rekening dulu supaya transaksi punya sumber dana.",
+                title: "Belum ada rekening",
+                tone: "warning",
+              });
               return;
             }
             setSelectedTransaction(null);
@@ -66,7 +74,11 @@ export default function DashboardScreen() {
           }}
           onTransfer={() => {
             if (summary.accounts.length < 2) {
-              Alert.alert("Rekening tidak cukup", "Minimal perlu dua rekening untuk melakukan transfer.");
+              appAlert.show({
+                message: "Minimal perlu dua rekening supaya saldo bisa dipindahkan antar sumber dana.",
+                title: "Rekening tidak cukup",
+                tone: "warning",
+              });
               return;
             }
             setShowTransferForm(true);
@@ -74,6 +86,8 @@ export default function DashboardScreen() {
           savingsRate={summary.savingsRate}
         />
       )}
+
+      <DailyMoneyPulse budgets={summary.budgets} transactions={summary.transactions} />
 
       <View className="flex-row gap-3">
         <MetricCard accent="sky" icon={Landmark} label={`Masuk ${currentMonthLabel}`} value={formatCurrency(summary.monthlyIncome, true)} />
@@ -98,7 +112,7 @@ export default function DashboardScreen() {
         </View>
       )}
 
-
+      <BudgetChallengeCard budgets={summary.budgets} transactions={summary.transactions} />
 
       <View className="gap-3">
         <SectionHeader actionLabel="Detail" icon={PiggyBank} onActionPress={() => router.push("/budgets")} title="Budget aktif" />

@@ -65,7 +65,7 @@ export function BalanceCard({ balance, cashflow, onAddTransaction, onTransfer, s
         </View>
 
         <View className="flex-row gap-3">
-          <Button className="flex-1 bg-white" icon={Plus} label="Tambah" onPress={onAddTransaction} variant="secondary" />
+          <Button className="flex-1 bg-white" icon={Plus} label="Quick Add" onPress={onAddTransaction} variant="secondary" />
           <Button
             className="flex-1 border-white/25 bg-white/10"
             icon={ArrowUpRight}

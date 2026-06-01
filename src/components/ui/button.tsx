@@ -1,5 +1,6 @@
 import type { ComponentType } from "react";
 import { Pressable, Text, type PressableProps } from "react-native";
+import * as Haptics from "expo-haptics";
 import type { LucideProps } from "lucide-react-native";
 
 import { colors } from "@/constants/theme";
@@ -25,7 +26,7 @@ const labelVariants: Record<ButtonVariant, string> = {
   secondary: "text-ink",
 };
 
-export function Button({ className, disabled, icon: Icon, label, variant = "primary", ...props }: ButtonProps) {
+export function Button({ className, disabled, icon: Icon, label, onPress, variant = "primary", ...props }: ButtonProps) {
   return (
     <Pressable
       className={cn(
@@ -35,6 +36,10 @@ export function Button({ className, disabled, icon: Icon, label, variant = "prim
         className,
       )}
       disabled={disabled}
+      onPress={(event) => {
+        Haptics.selectionAsync().catch(() => undefined);
+        onPress?.(event);
+      }}
       {...props}
     >
       {Icon ? <Icon color={variant === "primary" ? colors.surface : colors.ink} size={18} strokeWidth={2.3} /> : null}
