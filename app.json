@@ -60,7 +60,8 @@
             }
           ]
         }
-      ]
+      ],
+      "./plugins/with-android-widget-strings"
     ],
     "experiments": {
       "typedRoutes": true
